@@ -35,7 +35,7 @@ Rhythm tracks **routines, not just habits**. You build a *rhythm* (e.g. Morning 
 
 ### Monetisation (Freemium + Subscription)
 - **Free:** up to 2 rhythms, up to 8 beats, basic momentum, manual logging.
-- **Pro (€2.99 / month or €19.99 / year):** unlimited rhythms and beats, AI Coach insights, weekly AI reflections, advanced charts, iCloud backup (future), Siri shortcuts.
+- **Pro (€4.99 / month or €47.99 / year — *save 20%* on the annual plan):** unlimited rhythms and beats, AI Coach insights, weekly AI reflections, advanced charts, iCloud backup (future), Siri shortcuts.
 
 A static paywall card lives in **Settings → Rhythm Pro**. Payments are not implemented in v1.
 

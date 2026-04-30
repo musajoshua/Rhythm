@@ -76,14 +76,22 @@ struct SettingsView: View {
                     .frame(height: 1)
                     .padding(.vertical, 4)
 
-                HStack {
+                HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("€2.99 / month")
+                        Text("€4.99 / month")
                             .font(Typography.headline)
                             .foregroundStyle(Theme.primaryText)
-                        Text("or €19.99 / year")
-                            .font(Typography.footnote)
-                            .foregroundStyle(Theme.secondaryText)
+                        HStack(spacing: 6) {
+                            Text("or €47.99 / year")
+                                .font(Typography.footnote)
+                                .foregroundStyle(Theme.secondaryText)
+                            Text("Save 20%")
+                                .font(Typography.caption.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Theme.accentSoft))
+                                .foregroundStyle(Theme.accent)
+                        }
                     }
                     Spacer()
                     Button("Learn more") {}
