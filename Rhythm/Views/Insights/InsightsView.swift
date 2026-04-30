@@ -24,6 +24,10 @@ struct InsightsView: View {
             if viewModel == nil {
                 viewModel = InsightsViewModel(persistence: persistence, aiCoach: aiCoach)
             }
+            // Re-poll Apple Intelligence so the footer text reflects the
+            // current state if the user toggled it in iOS Settings while
+            // the app was backgrounded.
+            aiCoach.refreshAvailability()
             Task { await viewModel?.generateIfNeeded() }
         }
         .task {

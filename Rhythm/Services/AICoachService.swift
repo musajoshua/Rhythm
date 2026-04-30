@@ -67,6 +67,20 @@ nonisolated struct WeeklySummary: Sendable {
     }
 }
 
+// MARK: - Per-rhythm tip context
+
+/// Compact summary used by the per-rhythm "Get a tip" feature on the detail
+/// screen. Keeps the prompt short and grounded in this rhythm only.
+nonisolated struct RhythmTipContext: Sendable {
+    let name: String
+    let period: String
+    let beatTitles: [String]      // "(opt)" suffix on optional beats
+    let reminder: String?         // "07:00" or nil
+    let last7DaysCompletionRate: Double  // 0…1
+    let currentStreak: Int
+    let recentReflections: [String]
+}
+
 // MARK: - Service
 
 @Observable
@@ -107,11 +121,25 @@ final class AICoachService {
     private let suggestionKey = "rhythm.lastSuggestion"
     private let weekKey = "rhythm.lastReflectionWeek"
 
-    init() { loadCached() }
+    /// Cached availability so view bodies don't re-poll the framework on every
+    /// render. Refreshed on init and whenever the app foregrounds (callers
+    /// can also call `refreshAvailability()` manually).
+    private(set) var availability: AvailabilityStatus = .unavailableModelNotReady
+
+    init() {
+        loadCached()
+        availability = currentAvailability()
+    }
 
     // MARK: - Availability
 
-    var availability: AvailabilityStatus {
+    /// Re-poll Apple Intelligence's current state. Cheap; safe to call from
+    /// `onAppear` and on app foreground notifications.
+    func refreshAvailability() {
+        availability = currentAvailability()
+    }
+
+    private func currentAvailability() -> AvailabilityStatus {
 #if canImport(FoundationModels)
         let model = SystemLanguageModel.default
         switch model.availability {
@@ -186,6 +214,25 @@ final class AICoachService {
         return result
     }
 
+    /// Stream a short tip about a single rhythm. Bound to the rhythm's own
+    /// shape and recent activity rather than the whole week. Not cached.
+    @discardableResult
+    func streamRhythmTip(
+        context: RhythmTipContext,
+        onPartial: @MainActor @escaping (String) -> Void
+    ) async throws -> String {
+        let instructions = """
+        You analyse a single named routine ("rhythm") and offer ONE concrete \
+        tip the user could try this week to improve it. The tip can be \
+        structural (add, remove, rename or reorder a specific beat; change \
+        the period or reminder time) or behavioural. Reference the rhythm \
+        and beats by name. Keep it to 1–2 sentences. Warm, calm, second \
+        person, no emojis.
+        """
+        let prompt = Self.buildRhythmTipPrompt(from: context)
+        return try await stream(instructions: instructions, prompt: prompt, onPartial: onPartial)
+    }
+
     private func stream(
         instructions: String,
         prompt: String,
@@ -256,6 +303,20 @@ final class AICoachService {
         return "Pick the single rhythm that matters most this week and protect its time before anything else."
     }
 
+    nonisolated func ruleBasedRhythmTip(context: RhythmTipContext) -> String {
+        let pct = Int((context.last7DaysCompletionRate * 100).rounded())
+        if pct >= 80 {
+            return "\(context.name) is humming along at \(pct)%. Consider adding one small optional beat — something light you'd enjoy on the strong days."
+        }
+        if pct >= 40 {
+            return "\(context.name) is at \(pct)% over the past week. Pick the single beat that's slipping most and shorten it — five minutes you'll actually do beats fifteen you skip."
+        }
+        if let reminder = context.reminder {
+            return "\(context.name) only landed \(pct)% of days. Try moving the \(reminder) reminder by 15–30 minutes to find a window that survives your real day."
+        }
+        return "\(context.name) needs a foothold. Add a daily reminder so the rhythm has a fixed place to land."
+    }
+
     // MARK: - Prompts
 
     private static func buildReflectionPrompt(from s: WeeklySummary) -> String {
@@ -306,6 +367,23 @@ final class AICoachService {
         }
         lines.append("")
         lines.append("Suggest exactly one concrete adjustment for next week.")
+        return lines.joined(separator: "\n")
+    }
+
+    private static func buildRhythmTipPrompt(from c: RhythmTipContext) -> String {
+        var lines: [String] = []
+        lines.append("Rhythm: \(c.name) (\(c.period))")
+        let reminder = c.reminder.map { "reminder \($0)" } ?? "no reminder"
+        lines.append("Schedule: \(reminder)")
+        lines.append("Beats: \(c.beatTitles.joined(separator: ", "))")
+        let pct = Int((c.last7DaysCompletionRate * 100).rounded())
+        lines.append("Last 7 days: \(pct)% of required beats completed.")
+        lines.append("Current streak: \(c.currentStreak) days.")
+        if !c.recentReflections.isEmpty {
+            lines.append("Recent user notes: \(c.recentReflections.map { "\"\($0)\"" }.joined(separator: " "))")
+        }
+        lines.append("")
+        lines.append("Give the user one concrete tip for this rhythm.")
         return lines.joined(separator: "\n")
     }
 
