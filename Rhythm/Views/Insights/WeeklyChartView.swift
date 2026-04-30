@@ -2,39 +2,57 @@
 //  WeeklyChartView.swift
 //  Rhythm
 //
-//  7-day completion bars. Custom shapes (no Charts framework) so the
-//  rendering matches the rest of the app's calm, editorial aesthetic.
+//  7-day completion bars rendered with the SwiftUI Charts framework, styled
+//  to match the rest of the editorial design system. Uses the project's
+//  rounded mark corners + accent gradient so the chart stays visually
+//  cohesive with the custom shapes elsewhere.
 //
 
 import SwiftUI
+import Charts
 
 struct WeeklyChartView: View {
     /// Per-day completion ratios + the date for the weekday label, oldest first.
     let data: [(date: Date, value: Double)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                ForEach(data.indices, id: \.self) { idx in
-                    VStack(spacing: 8) {
-                        TrendBar(value: data[idx].value)
-                            .frame(height: 96)
-                        Text(weekday(for: data[idx].date))
+        Chart(data, id: \.date) { item in
+            BarMark(
+                x: .value("Day", item.date, unit: .day),
+                y: .value("Completion", item.value)
+            )
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Theme.accent, Theme.accent.opacity(0.6)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .cornerRadius(6)
+        }
+        .chartYScale(domain: 0...1)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: [0, 0.5, 1]) { value in
+                AxisGridLine().foregroundStyle(Theme.divider)
+                AxisValueLabel {
+                    if let pct = value.as(Double.self) {
+                        Text("\(Int(pct * 100))%")
                             .font(Typography.caption)
                             .foregroundStyle(Theme.tertiaryText)
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
         }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day)) { value in
+                AxisValueLabel(format: .dateTime.weekday(.narrow))
+                    .foregroundStyle(Theme.tertiaryText)
+                    .font(Typography.caption)
+            }
+        }
+        .frame(height: 140)
         .frame(maxWidth: .infinity, alignment: .leading)
         .rhythmCard()
-    }
-
-    private func weekday(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEEE"
-        return formatter.string(from: date)
     }
 }
 
