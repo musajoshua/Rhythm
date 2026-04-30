@@ -14,6 +14,7 @@ struct RhythmDetailView: View {
 
     @Environment(PersistenceService.self) private var persistence
     @State private var showingEditor = false
+    @State private var showingTipSheet = false
     @State private var pulseBeatID: UUID? = nil
     @State private var reflectionDraft: String = ""
     @State private var didLoadReflection = false
@@ -49,6 +50,7 @@ struct RhythmDetailView: View {
                     hero
                     beatsList
                     reflectionSection
+                    pastReflectionsSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
@@ -59,7 +61,14 @@ struct RhythmDetailView: View {
         .navigationTitle(current.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    showingTipSheet = true
+                } label: {
+                    Image(systemName: "sparkles")
+                }
+                .accessibilityLabel("AI tip for this rhythm")
+
                 Button {
                     showingEditor = true
                 } label: {
@@ -70,6 +79,9 @@ struct RhythmDetailView: View {
         }
         .sheet(isPresented: $showingEditor) {
             RhythmEditorView(existingRhythm: current)
+        }
+        .sheet(isPresented: $showingTipSheet) {
+            RhythmTipSheet(rhythm: current)
         }
         .onAppear { loadReflectionIfNeeded() }
         .onDisappear { saveReflection() }
@@ -246,6 +258,52 @@ struct RhythmDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reflectionLastSavedAt)
+    }
+
+    // MARK: - Past reflections
+
+    @ViewBuilder
+    private var pastReflectionsSection: some View {
+        // Show the previous notes the user wrote on *this* rhythm. Today's
+        // (if it exists) is hidden so it doesn't double-up with the editor.
+        let todayKey = today
+        let earlier = persistence
+            .recentReflections(for: current.id, limit: 10)
+            .filter { !Calendar.current.isDate($0.day, inSameDayAs: todayKey) }
+
+        if !earlier.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader("Previous reflections",
+                              subtitle: "Your most recent notes for \(current.name)")
+                    .padding(.horizontal, 4)
+
+                VStack(spacing: 10) {
+                    ForEach(earlier) { entry in
+                        reflectionRow(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    private func reflectionRow(_ entry: DailyReflection) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(entry.day, format: .dateTime.weekday(.wide).month().day())
+                .font(Typography.caption)
+                .foregroundStyle(Theme.tertiaryText)
+                .textCase(.uppercase)
+                .tracking(0.6)
+            Text(entry.text)
+                .font(Typography.body)
+                .foregroundStyle(Theme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.surfaceMuted)
+        )
     }
 
     private func loadReflectionIfNeeded() {

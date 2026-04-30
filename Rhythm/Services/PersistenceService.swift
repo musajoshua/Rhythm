@@ -182,6 +182,16 @@ final class PersistenceService {
         Array(db.reflections.sorted(by: { $0.updatedAt > $1.updatedAt }).prefix(limit))
     }
 
+    /// Most recent reflections for a specific rhythm, newest first.
+    func recentReflections(for rhythmID: UUID, limit: Int = 10) -> [DailyReflection] {
+        Array(
+            db.reflections
+                .filter { $0.rhythmID == rhythmID }
+                .sorted(by: { $0.day > $1.day })
+                .prefix(limit)
+        )
+    }
+
     // MARK: - Reset
 
     func resetAll() {
