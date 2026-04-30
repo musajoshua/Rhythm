@@ -35,6 +35,10 @@ nonisolated struct WeeklySummary: Sendable {
     /// the bottom of the rhythm detail screen. Used as additional context so
     /// the coach can echo the user's own language back to them.
     let recentReflections: [Reflection]
+    /// Rhythm-level structure: lets the model suggest concrete adjustments
+    /// (add a hydration beat, move the reminder, etc.) grounded in what the
+    /// user actually has set up — not just numbers.
+    let rhythmStructure: [RhythmStructure]
 
     nonisolated struct PerRhythm: Sendable {
         let name: String
@@ -46,6 +50,15 @@ nonisolated struct WeeklySummary: Sendable {
         let rhythmName: String
         let dayOffset: Int  // 0 = today, -1 = yesterday, …
         let text: String
+    }
+
+    /// One row per rhythm describing its shape, so the coach can suggest a
+    /// structural tweak rather than only a behavioural one.
+    nonisolated struct RhythmStructure: Sendable {
+        let name: String
+        let period: String          // "Morning" / "Midday" / …
+        let beatTitles: [String]    // ordered, "(opt)" suffix on optional beats
+        let reminder: String?       // "07:00" or nil
     }
 
     var completionPercent: Int {
@@ -149,16 +162,23 @@ final class AICoachService {
         return result
     }
 
-    /// Stream a single concrete suggestion.
+    /// Stream a single concrete suggestion. Grounds its advice in the actual
+    /// shape of the user's rhythms (names, beats, reminders) — not just the
+    /// numerical data — so the suggestion can be structural as well as
+    /// behavioural.
     @discardableResult
     func streamSuggestion(
         summary: WeeklySummary,
         onPartial: @MainActor @escaping (String) -> Void
     ) async throws -> String {
         let instructions = """
-        You suggest exactly ONE concrete adjustment the user could try this \
-        week to improve their rhythm. Base the suggestion on the data \
-        provided. Keep it to one short sentence. Be specific. No emojis.
+        You analyse the user's rhythms and suggest exactly ONE concrete \
+        adjustment they could try this week. The adjustment can be \
+        structural (add, remove or reorder a beat in a specific rhythm; \
+        change a rhythm's period or reminder time) or behavioural \
+        (anchor a struggling rhythm to an existing habit). Reference \
+        rhythms and beats by name. Ground your advice in the data provided. \
+        Keep it to one short sentence. Be specific. No emojis.
         """
         let prompt = Self.buildSuggestionPrompt(from: summary)
         let result = try await stream(instructions: instructions, prompt: prompt, onPartial: onPartial)
@@ -271,9 +291,20 @@ final class AICoachService {
         for r in s.perRhythm {
             lines.append("- \(r.name): \(Int((r.completionRate * 100).rounded()))%, streak \(r.streak)d.")
         }
+        if !s.rhythmStructure.isEmpty {
+            lines.append("")
+            lines.append("Rhythm structure:")
+            for rs in s.rhythmStructure {
+                let beatList = rs.beatTitles.joined(separator: ", ")
+                let reminderText = rs.reminder.map { "reminder \($0)" } ?? "no reminder"
+                lines.append("- \(rs.name) (\(rs.period), \(reminderText)): \(beatList)")
+            }
+        }
         if !s.recentReflections.isEmpty {
+            lines.append("")
             lines.append("Recent reflections: \(s.recentReflections.map { "\"\($0.text)\"" }.joined(separator: " "))")
         }
+        lines.append("")
         lines.append("Suggest exactly one concrete adjustment for next week.")
         return lines.joined(separator: "\n")
     }
