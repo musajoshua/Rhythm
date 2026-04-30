@@ -69,7 +69,8 @@ struct InsightsView: View {
 
     private func completionCard(vm: InsightsViewModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeader("Last 7 days", subtitle: "Average completion across all rhythms")
+            SectionHeader(vm.weekWindow.label,
+                          subtitle: "Average completion across all rhythms")
             HStack(spacing: 24) {
                 ZStack {
                     ProgressRing(

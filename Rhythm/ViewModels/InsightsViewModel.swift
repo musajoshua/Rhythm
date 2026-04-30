@@ -33,18 +33,25 @@ final class InsightsViewModel {
         self.suggestionText = resolvedCoach.lastSuggestion
     }
 
-    // MARK: - Last 7 days metrics
+    // MARK: - Week window
 
     private var startOfToday: Date { calendar.startOfDay(for: .now) }
 
-    var last7Days: [Date] {
-        (0..<7).compactMap { calendar.date(byAdding: .day, value: -$0, to: startOfToday) }
-            .reversed()
+    /// Active week window — install-anchored for the user's first 7 days,
+    /// rolling thereafter.
+    var weekWindow: WeekWindow {
+        WeekWindow.current(today: .now, calendar: calendar)
     }
 
-    /// Per-day completion *ratio* (0…1) for the last 7 days, oldest first.
+    /// All 7 days the chart should render, in chronological order.
+    var last7Days: [Date] { weekWindow.allDays }
+
+    /// Per-day completion *ratio* (0…1) for the chart. Future days during
+    /// week 1 are rendered as 0.
     var perDayRatios: [(date: Date, value: Double)] {
-        last7Days.map { day in
+        let pastSet = Set(weekWindow.pastDays)
+        return weekWindow.allDays.map { day in
+            guard pastSet.contains(day) else { return (day, 0) }
             let scheduled = persistence.db.rhythms.filter { $0.isScheduled(on: day, calendar: calendar) }
             let total = scheduled.reduce(0) { $0 + $1.trackingBeats.count }
             guard total > 0 else { return (day, 0) }
@@ -58,7 +65,9 @@ final class InsightsViewModel {
     }
 
     var totalCompletionsThisWeek: Int {
-        last7Days.reduce(0) { acc, day in
+        // Only count completions inside elapsed days of the window — future
+        // days don't have completions and shouldn't deflate the running total.
+        weekWindow.pastDays.reduce(0) { acc, day in
             acc + persistence.db.completions.filter { c in
                 calendar.isDate(c.completedAt, inSameDayAs: day)
             }.count
@@ -67,7 +76,7 @@ final class InsightsViewModel {
 
     var totalScheduledThisWeek: Int {
         var total = 0
-        for day in last7Days {
+        for day in weekWindow.pastDays {
             for rhythm in persistence.db.rhythms where rhythm.isScheduled(on: day, calendar: calendar) {
                 total += rhythm.trackingBeats.count
             }
@@ -109,7 +118,7 @@ final class InsightsViewModel {
 
     var perRhythmBreakdown: [(rhythm: Rhythm, completionRate: Double, streak: Int)] {
         persistence.db.rhythms.map { rhythm in
-            let scheduledDays = last7Days.filter { rhythm.isScheduled(on: $0, calendar: calendar) }
+            let scheduledDays = weekWindow.pastDays.filter { rhythm.isScheduled(on: $0, calendar: calendar) }
             let trackingPerDay = max(rhythm.trackingBeats.count, 1)
             let scheduledTotal = scheduledDays.count * trackingPerDay
             let completedTotal = scheduledDays.reduce(0) { acc, day in
@@ -146,8 +155,8 @@ final class InsightsViewModel {
     }
 
     private func reflectionsForPrompt() -> [WeeklySummary.Reflection] {
-        // Take the newest reflections that fall within the last 7 days.
-        let cutoff = calendar.date(byAdding: .day, value: -6, to: startOfToday) ?? startOfToday
+        // Take the newest reflections that fall inside the active week window.
+        let cutoff = weekWindow.pastDays.first ?? startOfToday
         return persistence.recentReflections(limit: 3).compactMap { r in
             guard r.day >= cutoff,
                   let rhythm = persistence.db.rhythms.first(where: { $0.id == r.rhythmID })
@@ -165,6 +174,26 @@ final class InsightsViewModel {
         let breakdown = perRhythmBreakdown
         let best = breakdown.max(by: { $0.completionRate < $1.completionRate })
         let worst = breakdown.min(by: { $0.completionRate < $1.completionRate })
+        let structure: [WeeklySummary.RhythmStructure] = persistence.db.rhythms.map { r in
+            let beatTitles = r.sortedBeats.map { beat -> String in
+                let suffix = beat.isRequired ? "" : " (opt)"
+                return beat.name + suffix
+            }
+            let reminder: String?
+            if let t = r.reminderTime {
+                let f = DateFormatter()
+                f.dateFormat = "HH:mm"
+                reminder = f.string(from: t)
+            } else {
+                reminder = nil
+            }
+            return WeeklySummary.RhythmStructure(
+                name: r.name,
+                period: r.period.displayName,
+                beatTitles: beatTitles,
+                reminder: reminder
+            )
+        }
         return WeeklySummary(
             totalScheduled: totalScheduledThisWeek,
             totalCompleted: totalCompletionsThisWeek,
@@ -178,7 +207,8 @@ final class InsightsViewModel {
                     streak: $0.streak
                 )
             },
-            recentReflections: reflectionsForPrompt()
+            recentReflections: reflectionsForPrompt(),
+            rhythmStructure: structure
         )
     }
 

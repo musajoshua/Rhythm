@@ -101,11 +101,19 @@ final class TodayViewModel {
         ).current
     }
 
-    // MARK: - Momentum (last 7 days)
+    // MARK: - Momentum (week window)
+
+    private var weekWindow: WeekWindow {
+        WeekWindow.current(today: .now, calendar: calendar)
+    }
 
     var momentumSummary: MomentumSummary {
-        let perDay = last7DayProgress()
-        let avg = perDay.isEmpty ? 0 : perDay.reduce(0, +) / Double(perDay.count)
+        let perDay = perDayProgress()
+        // Average over actually-elapsed days only — future placeholders during
+        // the first week shouldn't drag a brand-new user's average to zero.
+        let elapsedCount = weekWindow.pastDays.count
+        let elapsedSum = perDay.prefix(elapsedCount).reduce(0, +)
+        let avg = elapsedCount == 0 ? 0 : elapsedSum / Double(elapsedCount)
         return MomentumSummary(
             percentage: avg,
             perDay: perDay,
@@ -113,12 +121,11 @@ final class TodayViewModel {
         )
     }
 
-    private func last7DayProgress() -> [Double] {
-        let days = (0..<7).compactMap { offset in
-            calendar.date(byAdding: .day, value: -offset, to: today)
-        }.reversed()
-
-        return days.map { day in
+    private func perDayProgress() -> [Double] {
+        let pastSet = Set(weekWindow.pastDays)
+        return weekWindow.allDays.map { day in
+            // Future days during week 1 render as empty pips.
+            guard pastSet.contains(day) else { return 0 }
             let scheduled = persistence.db.rhythms.filter { $0.isScheduled(on: day, calendar: calendar) }
             let total = scheduled.reduce(0) { $0 + $1.trackingBeats.count }
             guard total > 0 else { return 0 }
