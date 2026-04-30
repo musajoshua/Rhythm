@@ -113,6 +113,20 @@ final class RhythmEditorViewModel {
 
     var isEditing: Bool { originalID != nil }
 
+    /// Total beats that would exist across the whole DB after this save.
+    /// Used by the paywall gate when the user is on the free tier.
+    var projectedTotalBeats: Int {
+        let othersBeats = persistence.db.rhythms
+            .filter { $0.id != originalID }
+            .reduce(0) { $0 + $1.beats.count }
+        return othersBeats + beats.count
+    }
+
+    /// True when the projected total is allowed by the current tier.
+    var savingFitsFreeTier: Bool {
+        Pricing.canSaveWithBeatTotal(projectedTotalBeats)
+    }
+
     // MARK: - Mutations
 
     func didChangePeriod() {

@@ -16,6 +16,14 @@ final class SettingsViewModel {
     var notificationsEnabled: Bool = false
     var notificationsAuthStatus: UNAuthorizationStatus = .notDetermined
 
+    /// Whether the user has flipped the concept Premium toggle. Backed by
+    /// `Pricing.isPremium` so the gating logic everywhere else stays in one
+    /// place.
+    var isPremium: Bool {
+        get { Pricing.isPremium }
+        set { Pricing.isPremium = newValue }
+    }
+
     init(persistence: PersistenceService? = nil,
          notifications: NotificationService? = nil) {
         self.persistence = persistence ?? PersistenceService.shared
@@ -63,6 +71,8 @@ final class SettingsViewModel {
         AICoachService.shared.clearCache()
         // Reset the install-date anchor so the chart starts a fresh first week.
         InstallationDate.reset()
+        // Drop back to the free tier.
+        Pricing.reset()
         // Bring the user back to onboarding so the next launch feels fresh.
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.synchronize()

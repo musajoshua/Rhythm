@@ -9,6 +9,7 @@ struct RhythmsView: View {
     @Environment(PersistenceService.self) private var persistence
     @State private var viewModel: RhythmsViewModel?
     @State private var showingEditor = false
+    @State private var showingPaywall = false
     @State private var pendingDeletion: Rhythm? = nil
 
     var body: some View {
@@ -18,16 +19,16 @@ struct RhythmsView: View {
                 content
             }
             .navigationTitle("Rhythms")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingEditor = true
-                    } label: {
-                        Image(systemName: "plus")
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            handleAddTapped()
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("New rhythm")
                     }
-                    .accessibilityLabel("New rhythm")
                 }
-            }
         }
         .onAppear {
             if viewModel == nil {
@@ -36,6 +37,12 @@ struct RhythmsView: View {
         }
         .sheet(isPresented: $showingEditor) {
             RhythmEditorView(existingRhythm: nil)
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallSheet(
+                title: "You've hit the free cap",
+                message: "Free covers \(Pricing.freeRhythmLimit) rhythms. Upgrade to Pro for unlimited rhythms and beats."
+            )
         }
         .alert(
             "Delete \(pendingDeletion?.name ?? "rhythm")?",
@@ -65,7 +72,7 @@ struct RhythmsView: View {
                     title: "No rhythms yet",
                     message: "Build a rhythm to get started.",
                     actionLabel: "Create a rhythm",
-                    action: { showingEditor = true }
+                    action: { handleAddTapped() }
                 )
             } else {
                 ScrollView {
@@ -134,6 +141,14 @@ struct RhythmsView: View {
         }
         .rhythmCard()
         .contentShape(Rectangle())
+    }
+
+    private func handleAddTapped() {
+        if Pricing.canAddRhythm(currentCount: persistence.db.rhythms.count) {
+            showingEditor = true
+        } else {
+            showingPaywall = true
+        }
     }
 
     private func metaLine(for rhythm: Rhythm) -> String {

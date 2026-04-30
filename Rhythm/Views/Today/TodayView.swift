@@ -9,6 +9,7 @@ struct TodayView: View {
     @Environment(PersistenceService.self) private var persistence
     @State private var viewModel: TodayViewModel?
     @State private var showingEditor = false
+    @State private var showingPaywall = false
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,20 @@ struct TodayView: View {
         .sheet(isPresented: $showingEditor) {
             RhythmEditorView(existingRhythm: nil)
         }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallSheet(
+                title: "You've hit the free cap",
+                message: "Free covers \(Pricing.freeRhythmLimit) rhythms. Upgrade to Pro for unlimited rhythms and beats."
+            )
+        }
+    }
+
+    private func handleAddTapped() {
+        if Pricing.canAddRhythm(currentCount: persistence.db.rhythms.count) {
+            showingEditor = true
+        } else {
+            showingPaywall = true
+        }
     }
 
     // MARK: - Layout
@@ -48,7 +63,7 @@ struct TodayView: View {
             }
             Spacer()
             Button {
-                showingEditor = true
+                handleAddTapped()
             } label: {
                 Image(systemName: "plus")
                     .font(.title3.weight(.semibold))
@@ -69,14 +84,14 @@ struct TodayView: View {
     @ViewBuilder
     private func contentView(vm: TodayViewModel) -> some View {
         if persistence.db.rhythms.isEmpty {
-            EmptyStateView(
-                symbol: "sun.horizon",
-                title: "Build your first rhythm",
-                message: "Start with a single rhythm — Morning, Evening, or anything in between — and add a few small beats.",
-                actionLabel: "Create a rhythm",
-                action: { showingEditor = true }
-            )
-            .padding(.top, 40)
+                EmptyStateView(
+                    symbol: "sun.horizon",
+                    title: "Build your first rhythm",
+                    message: "Start with a single rhythm — Morning, Evening, or anything in between — and add a few small beats.",
+                    actionLabel: "Create a rhythm",
+                    action: { handleAddTapped() }
+                )
+                .padding(.top, 40)
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {

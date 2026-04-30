@@ -31,7 +31,7 @@ struct SettingsView: View {
     private var content: some View {
         if let vm = viewModel {
             Form {
-                paywallSection
+                paywallSection(vm: vm)
                 notificationsSection(vm: vm)
                 debugSection(vm: vm)
                 aboutSection(vm: vm)
@@ -45,7 +45,7 @@ struct SettingsView: View {
 
     // MARK: - Sections
 
-    private var paywallSection: some View {
+    private func paywallSection(vm: SettingsViewModel) -> some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
@@ -56,18 +56,19 @@ struct SettingsView: View {
                         .font(Typography.title)
                         .foregroundStyle(Theme.primaryText)
                     Spacer()
-                    Text("Coming soon")
-                        .font(Typography.caption)
+                    Text(vm.isPremium ? "Active" : "Free")
+                        .font(Typography.caption.weight(.semibold))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(Theme.accentSoft))
-                        .foregroundStyle(Theme.accent)
+                        .background(Capsule().fill(vm.isPremium ? Theme.accent : Theme.accentSoft))
+                        .foregroundStyle(vm.isPremium ? .white : Theme.accent)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
                     bullet("Unlimited rhythms and beats")
                     bullet("On-device AI Coach insights")
                     bullet("Weekly AI reflection summaries")
+                    bullet("Per-rhythm AI tips on demand")
                     bullet("Richer charts and exports")
                 }
 
@@ -78,14 +79,14 @@ struct SettingsView: View {
 
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("€4.99 / month")
+                        Text(Pricing.monthlyPrice)
                             .font(Typography.headline)
                             .foregroundStyle(Theme.primaryText)
                         HStack(spacing: 6) {
-                            Text("or €47.99 / year")
+                            Text("or " + Pricing.yearlyPrice)
                                 .font(Typography.footnote)
                                 .foregroundStyle(Theme.secondaryText)
-                            Text("Save 20%")
+                            Text(Pricing.yearlySavingsBadge)
                                 .font(Typography.caption.weight(.semibold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -94,15 +95,24 @@ struct SettingsView: View {
                         }
                     }
                     Spacer()
-                    Button("Learn more") {}
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .disabled(true)
                 }
+
+                Toggle(isOn: Binding(
+                    get: { vm.isPremium },
+                    set: { vm.isPremium = $0 }
+                )) {
+                    Text("Premium (concept)")
+                        .font(Typography.body)
+                }
+                .tint(Theme.accent)
             }
             .padding(.vertical, 4)
+        } header: {
+            Text("Plan")
         } footer: {
-            Text("Free covers 2 rhythms and 8 beats. Pro is a static preview — payment isn't implemented in this build.")
+            Text(vm.isPremium
+                 ? "Premium is on. Caps are removed and AI features are unlocked."
+                 : "Free tier: \(Pricing.freeRhythmLimit) rhythms and \(Pricing.freeBeatLimit) beats. The toggle stands in for an in-app purchase — no real billing.")
                 .font(Typography.caption)
         }
     }

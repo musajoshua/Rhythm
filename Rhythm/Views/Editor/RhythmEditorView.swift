@@ -13,6 +13,7 @@ struct RhythmEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(PersistenceService.self) private var persistence
     @State private var viewModel: RhythmEditorViewModel?
+    @State private var showingPaywall = false
 
     var body: some View {
         NavigationStack {
@@ -31,14 +32,16 @@ struct RhythmEditorView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        viewModel?.save()
-                        onChange()
-                        dismiss()
-                    }
-                    .disabled(!(viewModel?.canSave ?? false))
-                    .font(.body.weight(.semibold))
+                    Button("Save") { attemptSave() }
+                        .disabled(!(viewModel?.canSave ?? false))
+                        .font(.body.weight(.semibold))
                 }
+            }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallSheet(
+                    title: "You've hit the free cap",
+                    message: "Free covers \(Pricing.freeBeatLimit) beats across all your rhythms. Upgrade to Pro to add more."
+                )
             }
         }
         .onAppear {
@@ -46,6 +49,17 @@ struct RhythmEditorView: View {
                 viewModel = RhythmEditorViewModel(existing: existingRhythm, persistence: persistence)
             }
         }
+    }
+
+    private func attemptSave() {
+        guard let vm = viewModel else { return }
+        if !vm.savingFitsFreeTier {
+            showingPaywall = true
+            return
+        }
+        vm.save()
+        onChange()
+        dismiss()
     }
 }
 
