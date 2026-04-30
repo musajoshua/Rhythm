@@ -61,6 +61,8 @@ final class SettingsViewModel {
         persistence.resetAll()
         // Wipe the AI cache so we don't keep stale reflections from before.
         AICoachService.shared.clearCache()
+        // Reset the install-date anchor so the chart starts a fresh first week.
+        InstallationDate.reset()
         // Bring the user back to onboarding so the next launch feels fresh.
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.synchronize()
